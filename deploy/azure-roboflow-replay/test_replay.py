@@ -89,3 +89,28 @@ def test_replay_rejects_unknown_frame(tmp_path, monkeypatch):
             files={"image": ("frame.jpg", unknown, "image/jpeg")},
         )
     assert response.status_code == 422
+
+
+def oversized_png(width: int, height: int) -> bytes:
+    """PNG de pocos bytes que declara dimensiones enormes, sin decodificar sus píxeles."""
+    import struct
+    import zlib
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(b"")) + chunk(b"IEND", b"")
+
+
+def test_huge_declared_dimensions_are_rejected_before_decoding():
+    import pytest
+
+    import fingerprint
+
+    bomb = oversized_png(13_000, 13_000)
+    assert len(bomb) < 100
+    with pytest.raises(ValueError, match="fotograma de vídeo"):
+        fingerprint.fingerprint_array(bomb)
+    # Un fotograma de tamaño normal sigue siendo válido.
+    assert fingerprint.fingerprint_array(jpeg((10, 20, 30))).shape == (18, 32, 3)

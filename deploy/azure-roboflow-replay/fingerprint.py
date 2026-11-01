@@ -12,11 +12,17 @@ FINGERPRINT_WIDTH = 32
 FINGERPRINT_HEIGHT = 18
 FINGERPRINT_CHANNELS = 3
 FINGERPRINT_SIZE = FINGERPRINT_WIDTH * FINGERPRINT_HEIGHT * FINGERPRINT_CHANNELS
+# Un fotograma de vídeo no pasa de 4K. Una imagen pequeña en bytes puede declarar
+# dimensiones enormes y agotar la memoria al decodificarse: se rechaza antes.
+MAX_SOURCE_PIXELS = 3840 * 2160
 
 
 def image_fingerprint(content: bytes) -> bytes:
     """Normaliza una imagen a una miniatura RGB estable frente a JPEG."""
     with Image.open(BytesIO(content)) as source:
+        width, height = source.size
+        if width * height > MAX_SOURCE_PIXELS:
+            raise ValueError("La imagen supera el tamaño de un fotograma de vídeo")
         image = ImageOps.exif_transpose(source).convert("RGB")
         image = image.resize(
             (FINGERPRINT_WIDTH, FINGERPRINT_HEIGHT),
