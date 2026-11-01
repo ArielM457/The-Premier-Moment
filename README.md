@@ -2,85 +2,93 @@
 
 **Demo:** <https://ca-mentoxp2-web.politegrass-7d829700.eastus2.azurecontainerapps.io>
 
-El partido con el estadio MESSI es `synthetic-live-001`, en la pestaña Partido del centro del partido. Si la demo estuvo inactiva, la primera carga tarda unos segundos. Antes de reproducir el estadio, TeamSpotting analiza el vídeo durante unos 3,5 minutos.
+The match with the MESSI stadium is `synthetic-live-001`, available in the Match tab of the Match Center. If the demo has been inactive, the first load may take a few seconds. Before stadium playback begins, TeamSpotting analyzes the video for approximately 3.5 minutes.
 
-Monorepo de The Prime Moment, una experiencia que convierte eventos sintéticos de fútbol en explicaciones y momentos personalizados. La [documentación](docs/README.md) contiene el alcance, las decisiones, los casos de uso y el contrato de eventos.
+The Prime Moment is a monorepo for an experience that transforms football events into personalized moments and clear explanations. The [project documentation](docs/README.md) covers the scope, decisions, use cases, and event contract.
 
-## **Diagramas y modelo de negocio**
+## **Event Data Lifecycle, Scalability, and Product Potential**
 
-Los tres diagramas muestran el diseño objetivo de la plataforma en Azure. La sección [Qué corre hoy en la demo](#qué-corre-hoy-en-la-demo) indica qué parte ya está desplegada.
+Each match begins as a continuous stream of video observations, ball and player positions, match events, viewer preferences, and editorial or community actions. MESSI, Roboflow, and TeamSpotting collect complementary information from the same authorized video, and every item is normalized into versioned contracts such as `MatchEvent v1` and `VisionObservation v1`. Each record keeps its match identifier, source identifier, event time, video time, confidence, and correlation data. Azure Event Hubs receives these streams, and the ingestion layer validates their schema, orders them, removes duplicates, reconciles late data, and synchronizes the match clock with the video clock before the information enters the intelligence core.
 
-### **1. Flujo de eventos y agentes**
+Every accepted event updates the reproducible match state, including the score, period, possession, timeline, statistics, play sequences, pressure, progressions, recoveries, shots, and detected situations. The analytics engine combines related signals, scores their relevance, and sends routine information directly to metrics while important events continue through context refinement, specialist agents, evidence verification, and presentation scheduling. Raw video and analysis artifacts are stored in Azure Blob Storage, while matches, normalized events, summaries, users, votes, messages, and editorial decisions are stored in PostgreSQL through Supabase. Verified metrics and insights return through Event Hubs, and FastAPI delivers them to the React application through REST, SSE, and WebSocket channels.
 
-![Flujo de eventos y agentes](docs/images/flujo-eventos-y-agentes.png)
+The model is scalable because streams are partitioned by `match_id`, processing services are stateless, and Container Apps can scale ingestion, analytics, agents, and delivery independently according to event volume and queue depth. Event Hubs handles high-throughput streams, while Service Bus adds priority, retries, expiration, idempotency, and dead-letter handling for important work without blocking routine match updates. This architecture is commercially strong because the same verified data pipeline can serve clubs, leagues, broadcasters, digital platforms, analysts, and fans through live explanations, personalized experiences, editorial tools, premium summaries, and B2B APIs. It turns one licensed data stream into several useful products while keeping every public explanation traceable to its evidence.
 
-Cada evento del partido y cada señal de control pasa primero por un filtro determinista, sin IA. El filtro valida el esquema, ordena y descarta duplicados, actualiza las métricas con cada evento aceptado, busca patrones de juego y decide la ruta:
+## **Diagrams and Business Model**
 
-- **Solo métricas:** actualiza el estado y las métricas del partido, que se publican en Event Hubs (`match-metrics`). No llama a ningún agente.
-- **Rechazado o duplicado:** queda en un registro de auditoría.
-- **Evento importante:** un peligro inmediato, un candidato a momento, un contexto de balón parado o un resumen de período o de partido. El refinador de contexto arma una solicitud solo con los eventos, métricas y preferencias necesarios y la deja en Service Bus (`important-events`). El orquestador la toma según su prioridad, su tiempo de vida y sin repetirla, y la envía al agente especialista: simulación de peligro, selección de momentos, narración o resumen.
+The three diagrams describe the target Azure architecture. The [What Runs in the Demo Today](#what-runs-in-the-demo-today) section identifies the components that are already deployed.
 
-La respuesta de cada agente pasa por la verificación de evidencia y hechos, que la contrasta con el estado y las métricas del partido. Lo verificado se publica en Event Hubs (`match-insights`), y la API de la experiencia lo entrega por REST y SSE a la interfaz en vivo, al resumen y a la revisión editorial. La línea continua indica un flujo directo; la punteada, mensajería.
+### **1. Event and Agent Flow**
 
-### **2. Arquitectura en Azure**
+![Event and agent flow](docs/images/flujo-eventos-y-agentes.png)
 
-![Arquitectura de la plataforma en Azure](docs/images/arquitectura-en-azure.png)
+Every match event and control signal first passes through a deterministic filter without AI. The filter validates the schema, orders events, removes duplicates, updates metrics for every accepted event, detects play patterns, and selects a route:
 
-La plataforma se organiza en seis capas:
+- **Metrics only:** updates match state and metrics, which are published to Event Hubs through `match-metrics`. No agent is called.
+- **Rejected or duplicate:** remains in an audit record.
+- **Important event:** represents immediate danger, a candidate moment, a dead-ball context, or a period or match recap. The context refiner creates a request with only the required events, metrics, and preferences, then places it in Service Bus through `important-events`. The orchestrator processes it according to priority, time to live, and idempotency before sending it to the correct specialist: danger simulation, moment selection, narration, or recap.
 
-1. **Entradas en vivo:** el vídeo, los eventos del partido, las preferencias del espectador y las acciones editoriales y de la comunidad.
-2. **Ingesta y sincronización:** el procesamiento de visión y seguimiento, API Management como puerta de entrada, Event Hubs para los flujos de partido y de visión, la validación con orden y sin duplicados, y la sincronización del reloj del vídeo con el del partido.
-3. **Núcleo de inteligencia del partido:** el motor de estado (marcador, posesión y línea de tiempo), el motor de analítica (métricas, patrones y situaciones), el enrutamiento previo a los agentes, la capa de agentes (narración, momentos, preguntas y resúmenes) y el planificador de presentación, que decide prioridad, momento y personalización.
-4. **Datos y mensajería:** Blob Storage para vídeo, observaciones y artefactos; Service Bus para los eventos importantes; Event Hubs para los eventos de rutina, las métricas y los insights; y PostgreSQL para partidos, eventos, usuarios y datos editoriales.
-5. **Entrega:** la API de FastAPI, el envío en tiempo real con Server-Sent Events y la aplicación web en React.
-6. **Experiencia de usuario:** la configuración inicial, el centro del partido (partido, resumen, estadísticas y vista táctica), el análisis de momentos, la revisión comunitaria y editorial, y Mi experiencia.
+Each agent response passes through evidence and fact verification, which compares it with the match state and metrics. Verified output is published to Event Hubs through `match-insights`, and the Experience API delivers it through REST and SSE to the live interface, recap, and editorial review. Solid lines represent direct flows, while dotted lines represent messaging.
 
-### **3. Despliegue en Azure**
+### **2. Azure Architecture**
 
-![Diagrama de despliegue en Azure](docs/images/despliegue-en-azure.png)
+![Azure platform architecture](docs/images/arquitectura-en-azure.png)
 
-Todo vive en un grupo de recursos. Cada componente del flujo es una Container App dentro del mismo entorno: el filtro previo (validación y enrutamiento), el refinador de contexto, el orquestador, los cuatro agentes especialistas, la verificación de hechos y la API de la experiencia. Entre el refinador y el orquestador, Service Bus guarda los eventos importantes. Event Hubs `match-metrics` lleva las métricas a Cosmos DB, que guarda el estado del partido. Event Hubs `match-insights` lleva los resultados verificados a la API. Los agentes usan modelos de AI Foundry, las claves están en Key Vault y la telemetría va a Application Insights. La interfaz se publica en Static Web Apps.
+The platform is organized into six layers:
 
-### **4. Modelo de negocio**
+1. **Live inputs:** video, match events, viewer preferences, and editorial and community actions.
+2. **Ingestion and synchronization:** vision and tracking processing, API Management as the entry point, Event Hubs for match and vision streams, ordered and deduplicated validation, and synchronization between the video clock and match clock.
+3. **Match intelligence core:** the state engine for score, possession, and timeline; the analytics engine for metrics, patterns, and situations; pre-agent routing; the agent layer for narration, moments, questions, and recaps; and the presentation scheduler for priority, timing, and personalization.
+4. **Data and messaging:** Blob Storage for video, observations, and artifacts; Service Bus for important events; Event Hubs for routine events, metrics, and insights; and PostgreSQL for matches, events, users, and editorial data.
+5. **Delivery:** the FastAPI service, real-time delivery through Server-Sent Events, and the React web application.
+6. **User experience:** initial setup, the Match Center with Match, Recap, Statistics, and Tactical View, moment analysis, community and editorial review, and My Experience.
 
-![Business Model Canvas de The Prime Moment](docs/images/business-model-canvas.png)
+### **3. Azure Deployment**
 
-Es una propuesta B2B2C: los clientes que pagan son clubes, ligas, medios y plataformas deportivas digitales, y los usuarios finales son aficionados, analistas y público general. La propuesta de valor es convertir los datos del partido en historias claras, con explicaciones en tiempo real, momentos destacados y contenido personalizado y verificable. El lienzo completa los nueve bloques:
+![Azure deployment diagram](docs/images/despliegue-en-azure.png)
 
-- **Socios clave:** proveedores de datos, clubes, ligas, titulares de derechos, socios tecnológicos y expertos en analítica.
-- **Actividades y recursos clave:** procesar eventos, generar explicaciones, verificar fuentes y medir el uso, con un motor de IA y datos con licencia.
-- **Relación con el cliente y canales:** configuración simple, explicaciones a pedido, experiencia personalizada, aplicación web y móvil, contenido para compartir y APIs B2B.
-- **Costos:** licencias de datos, desarrollo, nube, moderación, ventas y operación.
-- **Ingresos:** licencias B2B, suscripciones con funciones avanzadas, contenido premium, acceso a la API y soluciones a medida.
+All components live within one resource group. Each flow component is deployed as a Container App in the same environment: the pre-filter for validation and routing, the context refiner, the orchestrator, four specialist agents, fact verification, and the Experience API. Service Bus stores important events between the refiner and orchestrator. Event Hubs `match-metrics` carries metrics to Cosmos DB, which stores match state. Event Hubs `match-insights` carries verified results to the API. Agents use AI Foundry models, secrets are stored in Key Vault, and telemetry is sent to Application Insights. The interface is published through Static Web Apps.
 
-### **Qué corre hoy en la demo**
+### **4. Business Model**
 
-La demo es una versión reducida del diseño, desplegada con [`infra/azure/deploy-analytics.ps1`](infra/azure/deploy-analytics.ps1):
+![The Prime Moment Business Model Canvas](docs/images/business-model-canvas.png)
 
-- **Container Apps:** una sola API de FastAPI, con el filtro, el orquestador, los agentes y la verificación en el mismo proceso. Además corren la interfaz React servida con nginx, el procesador continuo (apagado por defecto) y el trabajo que repite partidos.
-- **Datos y mensajería:** Event Hubs (eventos del partido, insights y sala de la comunidad), Blob Storage con el vídeo MESSI, Container Registry, Log Analytics y una identidad administrada. Service Bus está creado, pero la API de la demo todavía enruta los eventos en memoria.
-- **Base de datos:** Supabase (PostgreSQL) es el origen de los partidos, y Supabase Auth valida a los editores.
-- **Visión:** el estadio usa el vídeo del simulador MESSI con Roboflow y TeamSpotting.
-- **Narración:** usa el proveedor provisional; Azure OpenAI se usa en local con `NARRATIVE_PROVIDER=azure`.
+The Prime Moment follows a B2B2C model. Paying customers are clubs, leagues, media organizations, and digital sports platforms, while end users include fans, analysts, and the general public. Its value proposition is to transform match data into clear stories, real-time explanations, highlights, and personalized, verifiable content. The canvas covers all nine areas:
 
-Todavía no están desplegados API Management, Key Vault, Application Insights, Cosmos DB, AI Foundry ni Static Web Apps, y los agentes no corren en contenedores separados.
+- **Key partners:** data providers, clubs, leagues, rights holders, technology partners, and analytics experts.
+- **Key activities and resources:** processing events, generating explanations, verifying sources, and measuring usage with an AI engine and licensed data.
+- **Customer relationships and channels:** simple setup, on-demand explanations, personalized experiences, web and mobile applications, shareable content, and B2B APIs.
+- **Costs:** data licenses, development, cloud services, moderation, sales, and operations.
+- **Revenue:** B2B licenses, subscriptions with advanced features, premium content, API access, and tailored solutions.
 
-## **Estructura**
+### **What Runs in the Demo Today**
 
-- `apps/frontend`: interfaz React en JavaScript, creada con Vite.
-- `apps/backend`: API FastAPI en Python con Uvicorn.
-- `docs`: decisiones, requisitos e investigación.
-- `.agents/skills`: instrucciones del proyecto para futuros agentes.
+The demo is a reduced deployment of the full design and is released with [`infra/azure/deploy-analytics.ps1`](infra/azure/deploy-analytics.ps1):
 
-## **Codex y Context7**
+- **Container Apps:** one FastAPI service contains the filter, orchestrator, agents, and verification process. The environment also runs the React interface through nginx, the continuous processor, which is off by default, and the job that replays matches.
+- **Data and messaging:** Event Hubs carries match events, insights, and community-room activity. Blob Storage contains the MESSI video. The deployment also includes Container Registry, Log Analytics, and a managed identity. Service Bus exists, while the demo API currently routes agent work inside the application process.
+- **Database:** Supabase PostgreSQL is the source of match data, and Supabase Auth validates editors.
+- **Vision:** the stadium experience uses the MESSI simulator video with Roboflow and TeamSpotting.
+- **Narration:** the deployed demo uses the provisional provider. Azure OpenAI is available locally with `NARRATIVE_PROVIDER=azure`.
 
-El repositorio incluye una configuración de Context7 para consultar documentación vigente de bibliotecas y frameworks desde Codex. Cada integrante debe autorizar su propia cuenta antes de usarla; no se comparten claves ni sesiones.
+API Management, Key Vault, Application Insights, Cosmos DB, AI Foundry, and Static Web Apps are not part of the current demo deployment, and the agents do not yet run in separate containers.
 
-Las instrucciones de confianza, autenticación, verificación y solución de problemas están en [`.codex/README.md`](.codex/README.md).
+## **Repository Structure**
 
-## **Preparación local**
+- `apps/frontend`: React interface written in JavaScript and built with Vite.
+- `apps/backend`: FastAPI service written in Python and served with Uvicorn.
+- `docs`: decisions, requirements, and research.
+- `.agents/skills`: project instructions for future agents.
 
-Se necesita Python 3.12, [uv](https://docs.astral.sh/uv/) y una versión de Node compatible con Vite. `uv` puede instalar automáticamente la versión fijada en `.python-version`. Desde la raíz del repositorio:
+## **Codex and Context7**
+
+The repository includes a Context7 configuration for consulting current library and framework documentation from Codex. Each contributor must authorize their own account. Keys and sessions are never shared.
+
+Trust, authentication, verification, and troubleshooting instructions are available in [`.codex/README.md`](.codex/README.md).
+
+## **Local Setup**
+
+The project requires Python 3.12, [uv](https://docs.astral.sh/uv/), and a Node version compatible with Vite. `uv` can automatically install the version pinned in `.python-version`. From the repository root, run:
 
 ```bash
 npm install
@@ -88,33 +96,33 @@ uv python install 3.12
 uv sync --project apps/backend --extra dev
 ```
 
-En una terminal, inicia la API con la configuración local de `apps/backend/.env`:
+In one terminal, start the API with the local configuration from `apps/backend/.env`:
 
 ```bash
 uv run --project apps/backend uvicorn match_intelligence.main:app --reload --app-dir apps/backend/src --env-file apps/backend/.env
 ```
 
-Copia primero `apps/backend/.env.example` como `apps/backend/.env`. El archivo real está ignorado por Git. Usa `NARRATIVE_PROVIDER=provisional` para trabajar sin servicios externos, `fixture` para probar los contratos reales de Persona 3 sin Azure o `azure` para usar los despliegues configurados.
+First copy `apps/backend/.env.example` to `apps/backend/.env`. The real file is ignored by Git. Use `NARRATIVE_PROVIDER=provisional` to work without external services, `fixture` to test the Persona 3 contracts without Azure, or `azure` to use the configured deployments.
 
-En otra terminal, inicia el frontend:
+In another terminal, start the frontend:
 
 ```bash
 npm run dev:frontend
 ```
 
-La interfaz local aparece en `http://localhost:5173`. Swagger UI está en `http://localhost:8000/docs`. La interfaz reproduce los partidos sintéticos con mensajes sincronizados, preferencias, preguntas, resumen y revisión editorial. También permite simular las seis rutas del filtro, revisar propuestas de recorte y consultar el flujo desde el perfil analista. La experiencia ya puede consumir el módulo de Persona 3 mediante el proveedor configurado; el detalle está en [Persona 4](docs/persona-4-api-y-frontend/README.md).
+The local interface is available at `http://localhost:5173`. Swagger UI is available at `http://localhost:8000/docs`. The interface plays synthetic matches with synchronized messages, preferences, questions, recaps, and editorial review. It can also simulate the six filter routes, review clip proposals, and inspect the flow from the analyst profile. The match experience can consume the Persona 3 module through the configured provider. See the [Persona 4 documentation](docs/persona-4-api-y-frontend/README.md) for details.
 
-CrewAI es una dependencia opcional del backend. Para usar la integración con Azure OpenAI, se puede instalar con `uv sync --project apps/backend --extra agents`.
+CrewAI is an optional backend dependency. Install it with `uv sync --project apps/backend --extra agents` to use the Azure OpenAI integration.
 
-El módulo de la persona 3 ya tiene contratos, un flujo de narración y pruebas con un partido sintético. Consulta la [guía de agentes y narrativa](apps/backend/README-narrativa.md) para ejecutarlo. La API expone las operaciones de narrativa con un proveedor sintético de prueba o con Azure OpenAI si se configura el recurso y los despliegues. El adaptador de la experiencia del partido usa ese mismo flujo sin cambiar los contratos del frontend.
+The Persona 3 module includes contracts, a narrative flow, and tests with a synthetic match. See the [agents and narrative guide](apps/backend/README-narrativa.md) to run it. The API exposes narrative operations through a synthetic test provider or Azure OpenAI when the resource and deployments are configured. The match-experience adapter uses the same flow without changing frontend contracts.
 
-El backend también tiene una primera versión del filtro y el enrutamiento de agentes. La ruta `/api/v1/agent-routing/evaluate` separa eventos de solo métricas y solicitudes relevantes, reconoce dos patrones iniciales y prepara un despacho reproducible. `POST /api/v1/matches/{match_id}/simulation` recorre seis escenarios sintéticos. Todavía no existe almacenamiento persistente ni un canal durable real.
+The backend also includes the first version of the event filter and agent routing. The `/api/v1/agent-routing/evaluate` route separates metrics-only events from relevant requests, recognizes two initial patterns, and prepares a reproducible dispatch. `POST /api/v1/matches/{match_id}/simulation` runs six synthetic scenarios. Durable storage and a production event channel for this route remain separate deployment steps.
 
-La [colección de Postman](postman/README.md) contiene peticiones y pruebas listas para importar.
+The [Postman collection](postman/README.md) contains ready-to-import requests and tests.
 
-## **Demostración integrada de datos y visión**
+## **Integrated Data and Vision Demonstration**
 
-La demostración reutiliza el backend oficial y una interfaz técnica de validación. No modifica el frontend de producto. Requiere el vídeo permitido y las exportaciones locales de Roboflow Sports, SoccerNet y DV-US-21.
+The integrated demonstration reuses the official backend and a technical validation interface. It does not modify the product frontend. It requires the authorized video and local exports from Roboflow Sports, SoccerNet, and DV-US-21.
 
 ```bash
 UV_CACHE_DIR=/tmp/mentox-uv-cache \
@@ -123,27 +131,25 @@ uv run --project apps/backend --python 3.12 \
   --app-dir experiments --host 127.0.0.1 --port 8018
 ```
 
-Abra <http://127.0.0.1:8018>. La API integrada está en `GET /api/v1/integration/status`, `GET /api/v1/integration/timeline` y `/docs`.
+Open <http://127.0.0.1:8018>. The integrated API is available at `GET /api/v1/integration/status`, `GET /api/v1/integration/timeline`, and `/docs`.
 
-Con Docker:
+With Docker:
 
 ```bash
 docker-compose -f compose.integration.yml up --build
 ```
 
-El vídeo y los resultados se montan como volúmenes de solo lectura y no se incorporan a la imagen. Para Azure, exporte las variables de `apps/backend/.env.example`; el modo predeterminado sigue siendo `memory`.
+The video and results are mounted as read-only volumes and are not included in the image. For Azure, export the variables from `apps/backend/.env.example`. The default transport mode remains `memory`.
 
-La interfaz controla la reproducción de las observaciones ya calculadas. No se
-publica nada hasta pulsar **Play**; pausa, salto y reinicio actualizan el cursor
-del backend sin volver a presentar el historial como nuevo.
+The interface controls the playback of previously calculated observations. Nothing is published until the user presses **Play**. Pause, seek, and restart update the backend cursor without presenting historical observations as new information.
 
-Para iniciar la prueba integrada:
+To start the integrated test, run:
 
 ```bash
 sudo docker-compose -f compose.integration.yml up --build
 ```
 
-En Azure, añada antes:
+For Azure, export these variables first:
 
 ```bash
 export VISION_OBSERVATION_TRANSPORT=azure_event_hubs
@@ -152,7 +158,4 @@ export VISION_EVENT_HUB_NAME="vision-observations"
 export VISION_EVENT_HUB_CONSUMER_GROUP="backend"
 ```
 
-El reproductor ordena al backend publicar el tramo cruzado. En Azure, el backend
-produce en Event Hubs, su consumidor recibe y deduplica, y finalmente WebSocket
-actualiza la interfaz. Esta prueba reutiliza inferencias ya calculadas; no vuelve
-a ejecutar los modelos.
+The player instructs the backend to publish the crossed time range. In Azure, the backend produces observations through Event Hubs, its consumer receives and deduplicates them, and WebSocket delivery updates the interface. This test reuses calculated inference results and does not rerun the models.
