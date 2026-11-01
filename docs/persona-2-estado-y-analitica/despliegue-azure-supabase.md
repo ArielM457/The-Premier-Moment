@@ -158,6 +158,8 @@ El script:
 | `-ReplayMatchId`, `-ReplaySpeed` | Partido y velocidad del trabajo `replay` |
 | `-SupabaseUrl` | URL del proyecto de Supabase con la que la API valida las sesiones de los editores. Por defecto usa `$env:SUPABASE_URL` o `SUPABASE_URL` de `apps/backend/.env`; sin ella, la revisión editorial responde `503` |
 | `-VisionVideoBlobName` | Ruta del vídeo MESSI en el contenedor `authorized-videos` del Storage del despliegue. Por defecto, `messi/messi-clean-2x180s-20261026/messi-001/match.mp4`; vacía, la API muestra la cancha sintética |
+| `-EnvironmentLocation` | Región del entorno de Container Apps y sus aplicaciones; por defecto, `-Location`. Una suscripción de Azure for Students admite un solo entorno, así que para el estadio con GPU T4 debe ser una región con T4, como `eastus` (`eastus2` no tiene). Si el entorno existe en otra región, el script lo reemplaza después de confirmar |
+| `-GpuWorkloadProfile` | Declara el perfil GPU T4 (`NC8as-T4`) que agregan los scripts de MESSI y Roboflow. Úselo en cada despliegue posterior a esos scripts; sin él, el despliegue quitaría la GPU del entorno |
 | `-InfraOnly` | Solo la fase 1 |
 | `-Yes` | No pide confirmación |
 

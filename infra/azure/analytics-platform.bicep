@@ -29,6 +29,12 @@ param environmentName string = 'demo'
 @description('Región de los recursos. De forma predeterminada usa la región del grupo.')
 param location string = resourceGroup().location
 
+@description('Región del entorno de Container Apps y sus aplicaciones. La suscripción admite un solo entorno: debe estar donde haya GPU T4 para el estadio (eastus sí, eastus2 no).')
+param environmentLocation string = location
+
+@description('Declara el perfil GPU T4 que agregan los scripts de MESSI y Roboflow; sin él, un despliegue lo quitaría del entorno.')
+param gpuWorkloadProfile bool = false
+
 @description('false en la fase 1; true cuando las imágenes ya están en el registro.')
 param deployApps bool = false
 
@@ -180,16 +186,22 @@ module dataRoles 'modules/analytics-roles.bicep' = {
 // Azure crea un entorno Express, que no admite trabajos y apaga lo que no recibe HTTP.
 resource environment 'Microsoft.App/managedEnvironments@2026-07-01' = {
   name: names.environment
-  location: location
+  location: environmentLocation
   tags: tags
   properties: {
     environmentMode: 'WorkloadProfiles'
-    workloadProfiles: [
+    workloadProfiles: concat([
       {
         name: 'Consumption'
         workloadProfileType: 'Consumption'
       }
-    ]
+    ], gpuWorkloadProfile ? [
+      {
+        // Mismo nombre que usan deploy-gpu-model-common.sh y deploy-messi-generator.sh.
+        name: 'NC8as-T4'
+        workloadProfileType: 'Consumption-GPU-NC8as-T4'
+      }
+    ] : [])
     appLogsConfiguration: {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
@@ -301,7 +313,7 @@ var azureEnv = [
 
 resource api 'Microsoft.App/containerApps@2024-03-01' = if (deployApps) {
   name: names.api
-  location: location
+  location: environmentLocation
   tags: tags
   identity: {
     type: 'UserAssigned'
@@ -403,7 +415,7 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = if (deployApps) {
 
 resource worker 'Microsoft.App/containerApps@2024-03-01' = if (deployApps) {
   name: names.worker
-  location: location
+  location: environmentLocation
   tags: tags
   identity: {
     type: 'UserAssigned'
@@ -458,7 +470,7 @@ resource worker 'Microsoft.App/containerApps@2024-03-01' = if (deployApps) {
 
 resource replay 'Microsoft.App/jobs@2024-03-01' = if (deployApps && hasDatabase) {
   name: names.replay
-  location: location
+  location: environmentLocation
   tags: tags
   identity: {
     type: 'UserAssigned'
@@ -515,7 +527,7 @@ resource replay 'Microsoft.App/jobs@2024-03-01' = if (deployApps && hasDatabase)
 
 resource web 'Microsoft.App/containerApps@2024-03-01' = if (deployWeb) {
   name: names.web
-  location: location
+  location: environmentLocation
   tags: tags
   identity: {
     type: 'UserAssigned'

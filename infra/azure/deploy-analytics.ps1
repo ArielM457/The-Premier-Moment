@@ -30,6 +30,13 @@ param(
 
     [string] $Location = 'eastus2',
 
+    # Región del entorno de Container Apps y sus aplicaciones. Por defecto, -Location.
+    # La suscripción admite un solo entorno: para el estadio debe tener GPU T4 (eastus).
+    [string] $EnvironmentLocation,
+
+    # Declara el perfil GPU T4 que agregan los scripts de MESSI y Roboflow, para no quitarlo.
+    [switch] $GpuWorkloadProfile,
+
     [ValidatePattern('^[a-z0-9]{3,9}$')]
     [string] $Prefix = 'mentoxp2',
 
@@ -223,8 +230,10 @@ if (-not (Test-AzCommand account show --output none)) {
     Invoke-Az login --output none | Out-Null
 }
 $account = ConvertFrom-AzJson (Invoke-Az account show --output json)
-Write-Host ("Suscripción: {0}" -f $account.name)
-Write-Host ("Grupo: {0} · Región: {1} · Prefijo: {2} · Entorno: {3}" -f $ResourceGroup, $Location, $Prefix, $Environment)
+if (-not $EnvironmentLocation) { $EnvironmentLocation = $Location }
+# Dos suscripciones pueden llamarse igual (Azure for Students): se muestra también el ID.
+Write-Host ("Suscripción: {0} ({1})" -f $account.name, $account.id)
+Write-Host ("Grupo: {0} · Región: {1} · Entorno de Container Apps en: {2} · Prefijo: {3} · Entorno: {4}" -f $ResourceGroup, $Location, $EnvironmentLocation, $Prefix, $Environment)
 if (-not $Yes -and -not $WhatIf) {
     $answer = Read-Host '¿Desplegar en esta suscripción? Crea recursos con costo (s/N)'
     if ($answer -notmatch '^(s|si|sí|y|yes)$') {
@@ -235,8 +244,10 @@ if (-not $Yes -and -not $WhatIf) {
 
 # Azure for Students limita las regiones permitidas con una política.
 $allowed = @(Get-AzQuiet policy assignment list --query '[].parameters.listOfAllowedLocations.value[]' --output tsv)
-if ($allowed.Count -gt 0 -and $allowed -notcontains $Location) {
-    throw ("La región {0} no está permitida en esta suscripción. Regiones permitidas: {1}" -f $Location, ($allowed -join ', '))
+foreach ($region in @($Location, $EnvironmentLocation) | Select-Object -Unique) {
+    if ($allowed.Count -gt 0 -and $allowed -notcontains $region) {
+        throw ("La región {0} no está permitida en esta suscripción. Regiones permitidas: {1}" -f $region, ($allowed -join ', '))
+    }
 }
 
 # ----- 3. Supabase ------------------------------------------------------------
@@ -356,7 +367,13 @@ function Get-EnvironmentProblem([string] $Name) {
     $existing = Get-AzQuiet rest --method get --url (Get-EnvironmentUrl $Name) --output json
     if (-not $existing) { return }
     if ($Name -eq $legacyEnvironmentName) { return 'es el entorno de un despliegue anterior' }
-    $properties = (ConvertFrom-AzJson $existing).properties
+    $resource = ConvertFrom-AzJson $existing
+    # Azure no mueve un entorno de región: hay que crearlo de nuevo donde se pide.
+    $current = ($resource.location -replace '\s', '').ToLowerInvariant()
+    if ($current -ne $EnvironmentLocation.ToLowerInvariant()) {
+        return "está en $current y se pidió $EnvironmentLocation"
+    }
+    $properties = $resource.properties
     if ($properties.PSObject.Properties['environmentMode'] -and $properties.environmentMode -eq 'Express') {
         return 'está en modo Express, que no admite el trabajo replay'
     }
@@ -418,9 +435,11 @@ foreach ($candidate in @($legacyEnvironmentName, $environmentName)) {
 }
 
 $baseParameters = @{
-    projectPrefix   = $Prefix
-    environmentName = $Environment
-    location        = $Location
+    projectPrefix       = $Prefix
+    environmentName     = $Environment
+    location            = $Location
+    environmentLocation = $EnvironmentLocation
+    gpuWorkloadProfile  = [bool] $GpuWorkloadProfile
 }
 
 # ----- 5. Fase 1: infraestructura ---------------------------------------------
