@@ -148,6 +148,20 @@ function Invoke-Native([string] $Command, [string[]] $Arguments) {
     }
 }
 
+function Push-Image([string] $Image) {
+    # ACR a veces corta la respuesta al subir el manifiesto. Repetir es barato:
+    # las capas que ya subieron se reutilizan.
+    foreach ($attempt in 1..3) {
+        & docker push $Image
+        if ($LASTEXITCODE -eq 0) { return }
+        if ($attempt -lt 3) {
+            Write-Warning "docker push falló (intento $attempt de 3). Se reintenta en 15 segundos."
+            Start-Sleep -Seconds 15
+        }
+    }
+    throw "docker push falló tras 3 intentos (código $LASTEXITCODE)"
+}
+
 function ConvertFrom-AzJson($Lines) {
     return ($Lines -join "`n") | ConvertFrom-Json
 }
@@ -511,7 +525,7 @@ foreach ($build in $builds) {
     if ($useDocker) {
         Invoke-Native 'docker' @('build', '--platform', 'linux/amd64', '--file', $build.File,
             '--tag', $build.Image, $build.Context)
-        Invoke-Native 'docker' @('push', $build.Image)
+        Push-Image $build.Image
     }
     else {
         # Algunas suscripciones de estudiante no permiten ACR Tasks; en ese caso use Docker.
