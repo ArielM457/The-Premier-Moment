@@ -371,8 +371,12 @@ az containerapp update \
 - La huella de primer plano no rechaza con seguridad un render MESSI ajeno al
   catálogo: su mejor puntaje queda cerca del de una captura correcta. La demo
   debe reproducir uno de los vídeos del catálogo.
-- El primer segundo de cada partido es la formación de saque, igual en los tres
-  vídeos. Una captura en ese instante puede recibir 409.
+- El saque inicial y el del segundo tiempo, hacia el segundo 90, muestran la
+  misma formación en los tres vídeos. Una captura en esos instantes puede
+  recibir 409; la siguiente se resuelve. En la auditoría del 1 de noviembre,
+  176 de 180 capturas JPEG 0.82 en instantes al azar devolvieron el vídeo y el
+  segundo correctos, una quedó a 1.5 s y tres recibieron 409 entre los segundos
+  90 y 91. Ninguna devolvió detecciones de otro vídeo u otro momento.
 - La huella debe comprobarse también con capturas reales de los navegadores de
   la demo.
 - Un vídeo nuevo exige repetir el preprocesamiento.
