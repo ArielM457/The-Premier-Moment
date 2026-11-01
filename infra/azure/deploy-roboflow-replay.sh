@@ -6,6 +6,7 @@ context_path="${repository_root}/deploy/azure-roboflow-replay"
 resource_group="${MENTOX_AZURE_RESOURCE_GROUP:-rg-mentox-dev}"
 location="${MENTOX_AZURE_LOCATION:-northcentralus}"
 environment_name="${MENTOX_CONTAINERAPPS_ENVIRONMENT:-cae-mentox-vision-dev}"
+environment_group="${MENTOX_CONTAINERAPPS_ENVIRONMENT_RESOURCE_GROUP:-${resource_group}}"
 app_name="${MENTOX_ROBOFLOW_APP_NAME:-ca-mentox-roboflow-dev}"
 identity_name="${MENTOX_ROBOFLOW_IDENTITY_NAME:-id-mentox-roboflow-dev}"
 image_repository="mentox/roboflow-precomputed-replay"
@@ -42,8 +43,8 @@ az() {
 
 [[ "$(az account show --query state --output tsv)" == "Enabled" ]] || die "La suscripción no está habilitada."
 az group show --name "${resource_group}" >/dev/null 2>&1 || die "No existe ${resource_group}; despliegue primero Roboflow GPU."
-az containerapp env show --resource-group "${resource_group}" --name "${environment_name}" >/dev/null 2>&1 || \
-  die "No existe el entorno ${environment_name}."
+environment_id="$(az containerapp env show --resource-group "${environment_group}" --name "${environment_name}" \
+  --query id --output tsv 2>/dev/null)" || die "No existe el entorno ${environment_name} en ${environment_group}."
 
 suffix="$(printf '%s' "$(az account show --query id --output tsv):${resource_group}" | sha256sum | cut -c1-8)"
 acr_name="${MENTOX_ACR_NAME:-mentox${suffix}}"
@@ -94,7 +95,7 @@ if az containerapp show --resource-group "${resource_group}" --name "${app_name}
 fi
 
 az containerapp create --resource-group "${resource_group}" --name "${app_name}" \
-  --environment "${environment_name}" --image "${image}" --user-assigned "${identity_id}" \
+  --environment "${environment_id}" --image "${image}" --user-assigned "${identity_id}" \
   --registry-server "${login_server}" --registry-identity "${identity_id}" \
   --workload-profile-name Consumption --cpu 0.5 --memory 1Gi \
   --ingress external --target-port 8000 --transport auto \

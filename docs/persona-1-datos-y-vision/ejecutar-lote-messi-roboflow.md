@@ -59,7 +59,18 @@ export MENTOX_STORAGE_ACCOUNT="<nombre-storage-existente>"
 # Para un lote distinto, establezca un ID nuevo y otra semilla:
 export MENTOX_BATCH_ID="messi-clean-demo-01"
 export MENTOX_BASE_SEED=20261031
+
+# Para usar un entorno de Container Apps que ya existe en otro grupo:
+export MENTOX_CONTAINERAPPS_ENVIRONMENT="<nombre-del-entorno>"
+export MENTOX_CONTAINERAPPS_ENVIRONMENT_RESOURCE_GROUP="<grupo-del-entorno>"
 ```
+
+Una suscripción Azure for Students admite un solo entorno de Container Apps.
+Si la demo ya tiene uno, use ese entorno: `MENTOX_AZURE_LOCATION` debe ser su
+región y esa región debe tener T4. La aplicación Roboflow, el job MESSI, el ACR,
+las identidades y Storage se crean en `MENTOX_AZURE_RESOURCE_GROUP`. El perfil
+T4 se agrega al entorno compartido. A partir de entonces, despliegue la demo con
+`-GpuWorkloadProfile` para no quitarlo.
 
 Si no se define Storage, el script calcula un nombre a partir de la suscripción
 y el grupo. Por defecto el lote es `messi-clean-3x180s-20261031`. Mantenga estas

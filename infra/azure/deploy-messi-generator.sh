@@ -7,6 +7,8 @@ context_path="${repository_root}/deploy/azure-messi-generator"
 resource_group="${MENTOX_AZURE_RESOURCE_GROUP:-rg-mentox-dev}"
 location="${MENTOX_AZURE_LOCATION:-northcentralus}"
 environment_name="${MENTOX_CONTAINERAPPS_ENVIRONMENT:-cae-mentox-vision-dev}"
+# El entorno compartido puede estar en otro grupo; el Job lo usa por su ID.
+environment_group="${MENTOX_CONTAINERAPPS_ENVIRONMENT_RESOURCE_GROUP:-${resource_group}}"
 profile_name="${MENTOX_GPU_PROFILE_NAME:-NC8as-T4}"
 profile_type="Consumption-GPU-NC8as-T4"
 job_name="${MENTOX_MESSI_JOB_NAME:-job-mentox-messi-dev}"
@@ -140,13 +142,14 @@ for role_and_scope in "AcrPull|${acr_id}" "Storage Blob Data Contributor|${conta
   fi
 done
 
-if ! az containerapp env show --resource-group "${resource_group}" --name "${environment_name}" >/dev/null 2>&1; then
-  az containerapp env create --resource-group "${resource_group}" --name "${environment_name}" \
+if ! az containerapp env show --resource-group "${environment_group}" --name "${environment_name}" >/dev/null 2>&1; then
+  az containerapp env create --resource-group "${environment_group}" --name "${environment_name}" \
     --location "${location}" --environment-mode WorkloadProfiles --logs-destination none --output none
 fi
-if ! az containerapp env workload-profile show --resource-group "${resource_group}" --name "${environment_name}" \
+environment_id="$(az containerapp env show --resource-group "${environment_group}" --name "${environment_name}" --query id --output tsv)"
+if ! az containerapp env workload-profile show --resource-group "${environment_group}" --name "${environment_name}" \
   --workload-profile-name "${profile_name}" >/dev/null 2>&1; then
-  az containerapp env workload-profile add --resource-group "${resource_group}" --name "${environment_name}" \
+  az containerapp env workload-profile add --resource-group "${environment_group}" --name "${environment_name}" \
     --workload-profile-name "${profile_name}" --workload-profile-type "${profile_type}" --output none
 fi
 
@@ -176,7 +179,7 @@ if az containerapp job show --resource-group "${resource_group}" --name "${job_n
     --replica-completion-count 1 --replace-env-vars "${env_vars[@]}" --output none
 else
   az containerapp job create --resource-group "${resource_group}" --name "${job_name}" \
-    --environment "${environment_name}" --trigger-type Manual --image "${image}" \
+    --environment "${environment_id}" --trigger-type Manual --image "${image}" \
     --mi-user-assigned "${identity_id}" --registry-server "${login_server}" --registry-identity "${identity_id}" \
     --workload-profile-name "${profile_name}" --cpu 8 --memory 56Gi \
     --replica-timeout "${replica_timeout}" --replica-retry-limit 1 --parallelism 1 \

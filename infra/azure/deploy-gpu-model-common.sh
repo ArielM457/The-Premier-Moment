@@ -20,6 +20,9 @@ done
 resource_group="${MENTOX_AZURE_RESOURCE_GROUP:-rg-mentox-dev}"
 location="${MENTOX_AZURE_LOCATION:-northcentralus}"
 environment_name="${MENTOX_CONTAINERAPPS_ENVIRONMENT:-cae-mentox-vision-dev}"
+# Una suscripción de estudiante admite un solo entorno: el de la demo puede vivir
+# en otro grupo y las aplicaciones de modelos lo usan por su ID.
+environment_group="${MENTOX_CONTAINERAPPS_ENVIRONMENT_RESOURCE_GROUP:-${resource_group}}"
 workload_profile_name="${MENTOX_GPU_PROFILE_NAME:-NC8as-T4}"
 workload_profile_type="Consumption-GPU-NC8as-T4"
 min_replicas="${MENTOX_MIN_REPLICAS:-0}"
@@ -144,18 +147,19 @@ if [[ "$(az role assignment list --assignee-object-id "${principal_id}" --scope 
     --assignee-principal-type ServicePrincipal --role AcrPull --scope "${acr_id}" --output none
 fi
 
-if ! az containerapp env show --resource-group "${resource_group}" --name "${environment_name}" >/dev/null 2>&1; then
-  az containerapp env create --resource-group "${resource_group}" --name "${environment_name}" \
+if ! az containerapp env show --resource-group "${environment_group}" --name "${environment_name}" >/dev/null 2>&1; then
+  az containerapp env create --resource-group "${environment_group}" --name "${environment_name}" \
     --location "${location}" --environment-mode WorkloadProfiles --logs-destination none --output none
 else
-  env_location="$(az containerapp env show --resource-group "${resource_group}" --name "${environment_name}" --query location --output tsv)"
+  env_location="$(az containerapp env show --resource-group "${environment_group}" --name "${environment_name}" --query location --output tsv)"
   [[ "$(normalize_location "${env_location}")" == "$(normalize_location "${location}")" ]] || die \
     "El entorno ${environment_name} está en ${env_location}, no en ${location}."
 fi
+environment_id="$(az containerapp env show --resource-group "${environment_group}" --name "${environment_name}" --query id --output tsv)"
 
-if ! az containerapp env workload-profile show --resource-group "${resource_group}" \
+if ! az containerapp env workload-profile show --resource-group "${environment_group}" \
   --name "${environment_name}" --workload-profile-name "${workload_profile_name}" >/dev/null 2>&1; then
-  az containerapp env workload-profile add --resource-group "${resource_group}" \
+  az containerapp env workload-profile add --resource-group "${environment_group}" \
     --name "${environment_name}" --workload-profile-name "${workload_profile_name}" \
     --workload-profile-type "${workload_profile_type}" --output none
 fi
@@ -184,7 +188,7 @@ if az containerapp show --resource-group "${resource_group}" --name "${MENTOX_DE
     --max-replicas "${max_replicas}" --set-env-vars "${model_env[@]}" --output none
 else
   az containerapp create --resource-group "${resource_group}" --name "${MENTOX_DEPLOY_APP_NAME}" \
-    --environment "${environment_name}" --image "${image}" --user-assigned "${identity_id}" \
+    --environment "${environment_id}" --image "${image}" --user-assigned "${identity_id}" \
     --registry-server "${login_server}" --registry-identity "${identity_id}" \
     --workload-profile-name "${workload_profile_name}" --cpu 8 --memory 56Gi \
     --ingress "${ingress}" --target-port 8000 --transport auto \
