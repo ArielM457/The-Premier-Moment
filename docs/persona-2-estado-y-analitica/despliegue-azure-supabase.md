@@ -157,9 +157,9 @@ El script:
 | `-ApiAlwaysOn` | Mantiene una réplica de la API para evitar el arranque en frío el día de la demo |
 | `-ReplayMatchId`, `-ReplaySpeed` | Partido y velocidad del trabajo `replay` |
 | `-SupabaseUrl` | URL del proyecto de Supabase con la que la API valida las sesiones de los editores. Por defecto usa `$env:SUPABASE_URL` o `SUPABASE_URL` de `apps/backend/.env`; sin ella, la revisión editorial responde `503` |
-| `-VisionVideoBlobName` | Ruta del vídeo MESSI en el contenedor `authorized-videos` del Storage del despliegue. Por defecto, `messi/messi-clean-2x180s-20261026/messi-001/match.mp4`; vacía, la API muestra la cancha sintética |
+| `-VisionVideoBlobName` | Ruta del vídeo MESSI en el contenedor `authorized-videos` del Storage del despliegue. Por defecto, `messi/messi-clean-3x180s-20261031/messi-001/match.mp4`, uno de los tres vídeos del catálogo de Roboflow; vacía, la API muestra la cancha sintética |
 | `-EnvironmentLocation` | Región del entorno de Container Apps y sus aplicaciones; por defecto, `-Location`. Una suscripción de Azure for Students admite un solo entorno, así que para el estadio con GPU T4 debe ser una región con T4, como `eastus` (`eastus2` no tiene). Si el entorno existe en otra región, el script lo reemplaza después de confirmar |
-| `-GpuWorkloadProfile` | Declara el perfil GPU T4 (`NC8as-T4`) que agregan los scripts de MESSI y Roboflow. Úselo en cada despliegue posterior a esos scripts; sin él, el despliegue quitaría la GPU del entorno |
+| `-GpuWorkloadProfile` | Declara el perfil GPU T4 (`NC8as-T4`) que usan MESSI, Roboflow y TeamSpotting. Si el entorno ya lo tiene, el script lo conserva aunque falte este switch |
 | `-InfraOnly` | Solo la fase 1 |
 | `-Yes` | No pide confirmación |
 
@@ -167,17 +167,16 @@ Si no hay cadena de Supabase, la API usa los partidos sintéticos en memoria y n
 
 ### Estadio MESSI en Azure
 
-La pestaña Partido muestra el vídeo MESSI cuando la API puede leer el vídeo y sus cuatro archivos compañeros: `manifest.json`, `events.jsonl`, `tracking.jsonl` y `metadata.jsonl`. La API los lee de su propio Storage con su identidad administrada; no puede leer el Blob de Damon porque está en otro tenant. Antes del primer despliegue con estadio, copie los cinco archivos a `authorized-videos`, en la misma ruta. Su cuenta necesita el rol Storage Blob Data Contributor sobre ese Storage:
+La pestaña Partido muestra el vídeo MESSI cuando la API puede leer el vídeo y sus cuatro archivos compañeros: `manifest.json`, `events.jsonl`, `tracking.jsonl` y `metadata.jsonl`. La API los lee de su propio Storage con su identidad administrada. El vídeo debe ser uno de los tres del lote que procesó Roboflow; el lote está en `evidencias-generadas/` después de la etapa `download` de `run-messi-roboflow.sh`. Antes del despliegue, copie los cinco archivos a `authorized-videos`, en la misma ruta. Su cuenta necesita el rol Storage Blob Data Contributor sobre ese Storage:
 
 ```bash
-PREFIX=messi/messi-clean-2x180s-20261026/messi-001
+PREFIX=messi/messi-clean-3x180s-20261031/messi-001
 for f in manifest.json match.mp4 events.jsonl tracking.jsonl metadata.jsonl; do
-  az storage blob download --account-name stdamonhxwjzbiyupwqc --container-name synthetic-videos --name "$PREFIX/$f" --file "$f" --auth-mode login --subscription <suscripción-de-Damon>
-  az storage blob upload --account-name <storage-del-despliegue> --container-name authorized-videos --name "$PREFIX/$f" --file "$f" --auth-mode login --subscription <su-suscripción>
+  az storage blob upload --account-name <storage-del-despliegue> --container-name authorized-videos --name "$PREFIX/$f" --file "evidencias-generadas/messi-clean-3x180s-20261031/$PREFIX/$f" --auth-mode login --subscription <su-suscripción>
 done
 ```
 
-El estadio también exige Roboflow Suite y SoccerNet TeamSpotting, los servicios de Damon. El script toma `ROBOFLOW_SUITE_ENDPOINT`, `ROBOFLOW_SUITE_API_KEY`, `SOCCERNET_ENDPOINT` y `SOCCERNET_API_KEY` de la terminal o de `apps/backend/.env`. Guarda las claves como secretos de Container Apps y nunca las muestra. Sin esos cuatro valores, el vídeo no se reproduce. Cada arranque de la API vuelve a analizar el vídeo con TeamSpotting: tarda unos 3,5 minutos y usa la GPU de Damon. Con `-ApiAlwaysOn`, la API no se apaga y el análisis no se repite.
+El estadio también exige Roboflow y SoccerNet TeamSpotting. Ambos corren en la misma suscripción y en el mismo entorno: Roboflow como réplica precalculada en CPU, desplegada por `run-messi-roboflow.sh`, y TeamSpotting en GPU T4, desplegado por `deploy-soccernet-teamspotting.sh`. El script toma `ROBOFLOW_SUITE_ENDPOINT`, `ROBOFLOW_SUITE_API_KEY`, `SOCCERNET_ENDPOINT` y `SOCCERNET_API_KEY` de la terminal o de `apps/backend/.env`; las dos claves son el `MENTOX_MODEL_API_KEY` de esos despliegues. Guarda las claves como secretos de Container Apps y nunca las muestra. Sin esos cuatro valores, el vídeo no se reproduce. Cada arranque de la API vuelve a analizar el vídeo con TeamSpotting: tarda unos 3,5 minutos más el arranque de la GPU, que luego vuelve a cero réplicas. Con `-ApiAlwaysOn`, la API no se apaga y el análisis no se repite.
 
 Con el estadio activo, la API descarga esos archivos al arrancar. El reproductor solo acepta avances de la reproducción vigente que no superen el tiempo transcurrido, y solo el partido con vídeo puede preparar los modelos.
 

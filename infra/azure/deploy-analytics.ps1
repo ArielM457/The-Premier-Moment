@@ -34,7 +34,7 @@ param(
     # La suscripción admite un solo entorno: para el estadio debe tener GPU T4 (eastus).
     [string] $EnvironmentLocation,
 
-    # Declara el perfil GPU T4 que agregan los scripts de MESSI y Roboflow, para no quitarlo.
+    # Declara el perfil GPU T4 de los modelos. Si el entorno ya lo tiene, se conserva sin este switch.
     [switch] $GpuWorkloadProfile,
 
     [ValidatePattern('^[a-z0-9]{3,9}$')]
@@ -56,7 +56,7 @@ param(
     [string] $SupabaseUrl,
 
     # Vídeo MESSI en el contenedor authorized-videos del Storage del despliegue. Vacío: sin estadio.
-    [string] $VisionVideoBlobName = 'messi/messi-clean-2x180s-20261026/messi-001/match.mp4',
+    [string] $VisionVideoBlobName = 'messi/messi-clean-3x180s-20261031/messi-001/match.mp4',
 
     # Carga el esquema y los datos ficticios en Supabase antes de la fase 2.
     [switch] $SeedDatabase,
@@ -447,6 +447,20 @@ foreach ($candidate in @($legacyEnvironmentName, $environmentName)) {
         }
     }
     Remove-ContainerAppsEnvironment $candidate
+}
+
+# Los scripts de modelos agregan el perfil T4 fuera de Bicep. Si el entorno ya lo
+# tiene, se declara siempre: sin él, el despliegue lo quitaría con Roboflow y
+# TeamSpotting encima.
+if (-not $GpuWorkloadProfile) {
+    $existing = Get-AzQuiet rest --method get --url (Get-EnvironmentUrl $environmentName) --output json
+    if ($existing) {
+        $profiles = @((ConvertFrom-AzJson $existing).properties.workloadProfiles)
+        if ($profiles | Where-Object { $_.workloadProfileType -eq 'Consumption-GPU-NC8as-T4' }) {
+            Write-Host 'El entorno ya tiene el perfil GPU T4 de los modelos: se conserva.'
+            $GpuWorkloadProfile = $true
+        }
+    }
 }
 
 $baseParameters = @{
