@@ -411,7 +411,8 @@ function Remove-ContainerAppsEnvironment([string] $Name) {
     Write-Host "Borrando el entorno $Name (tarda unos minutos)..."
     [void](Test-AzCommand containerapp env delete --name $Name --resource-group $ResourceGroup --yes --no-wait)
     $url = Get-EnvironmentUrl $Name
-    Wait-Until -What "el borrado de $Name" -Condition {
+    # Un entorno con perfiles de carga puede tardar más de 20 minutos en desaparecer.
+    Wait-Until -What "el borrado de $Name" -Minutes 45 -Condition {
         -not (Get-AzQuiet rest --method get --url $url --output json)
     }
 }
