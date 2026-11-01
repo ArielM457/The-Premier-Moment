@@ -7,7 +7,8 @@ Esta carpeta conserva la evidencia de implementación de cada historia de Person
 La integración actual de Roboflow, TeamSpotting y el replay MESSI conserva
 su [evidencia local y límites](messi-hibrido-20261027.md) y la
 [prueba real con ambas GPU, colas, worker e interfaz](messi-azure-20261027/README.md).
-GameState está retirado.
+GameState está retirado. El lote MESSI clean de tres partidos y su Roboflow
+precalculado en CPU tienen su [evidencia del 1 de noviembre](messi-roboflow-lote-20261101.md).
 
 | Historia | Estado | Evidencia |
 |---|---|---|
