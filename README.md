@@ -1,6 +1,6 @@
 # **The Prime Moment**
 
-**Demo:** <https://ca-mentoxp2-web.politegrass-7d829700.eastus2.azurecontainerapps.io>
+**Demo:** <https://ca-mentoxp2-web.yellowbush-4175ef32.eastus.azurecontainerapps.io>
 
 The match with the MESSI stadium is `synthetic-live-001`, available in the Match tab of the Match Center. If the demo has been inactive, the first load may take a few seconds. Before stadium playback begins, TeamSpotting analyzes the video for approximately 3.5 minutes.
 

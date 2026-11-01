@@ -22,8 +22,8 @@ Actualizado el 26 de octubre de 2026. Rama `persona-2/estado-analitica`, subida 
   - Centro del partido pulido: asistente con controles claros, campos y barras con el tema, y modo claro completo.
   - Revisión de seguridad con tres correcciones: límite de tamaño en la captura, vídeo por partes y contraseñas ocultas en los registros.
 - **Demo en Azure:**
-  - Interfaz: <https://ca-mentoxp2-web.politegrass-7d829700.eastus2.azurecontainerapps.io>
-  - API: <https://ca-mentoxp2-api.politegrass-7d829700.eastus2.azurecontainerapps.io/docs>
+  - Interfaz: <https://ca-mentoxp2-web.yellowbush-4175ef32.eastus.azurecontainerapps.io>
+  - API: <https://ca-mentoxp2-api.yellowbush-4175ef32.eastus.azurecontainerapps.io/docs>
   - Versión desplegada: API `bdc42b4` e interfaz `79c1b79`.
   - El tablero local sigue en [`demo/tablero.html`](demo/tablero.html).
 - **Flujo continuo probado en Azure:** 178 eventos por Event Hubs, todos aplicados a tiempo, con 51 ms de transporte medio y 27 ms de procesamiento. El registro quedó en Blob y en Supabase.
