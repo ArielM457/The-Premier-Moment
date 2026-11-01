@@ -361,9 +361,20 @@ az containerapp update \
 
 ## Limitaciones
 
-- La huella visual debe calibrarse con las capturas reales de los navegadores de
-  la demo. Los umbrales pueden configurarse con
-  `MENTOX_REPLAY_MAX_VISUAL_SCORE` y `MENTOX_REPLAY_MIN_SCORE_MARGIN`.
+- La miniatura de 32x18 no distingue los segundos del render MESSI clean: con
+  cámara fija, todos los fotogramas quedan a menos de 0.0002 entre sí y el
+  servicio respondía 409 a todas las capturas. La huella de primer plano resta
+  el fondo común y la reemplaza cuando el catálogo la trae. Sus umbrales son
+  `MENTOX_REPLAY_MAX_FOREGROUND_SCORE` y `MENTOX_REPLAY_MIN_FOREGROUND_RATIO`.
+  Los de la miniatura siguen siendo `MENTOX_REPLAY_MAX_VISUAL_SCORE` y
+  `MENTOX_REPLAY_MIN_SCORE_MARGIN`.
+- La huella de primer plano no rechaza con seguridad un render MESSI ajeno al
+  catálogo: su mejor puntaje queda cerca del de una captura correcta. La demo
+  debe reproducir uno de los vídeos del catálogo.
+- El primer segundo de cada partido es la formación de saque, igual en los tres
+  vídeos. Una captura en ese instante puede recibir 409.
+- La huella debe comprobarse también con capturas reales de los navegadores de
+  la demo.
 - Un vídeo nuevo exige repetir el preprocesamiento.
 - La API rechaza fotogramas desconocidos o ambiguos en lugar de inventar datos.
 - ACR Basic y una réplica CPU activa todavía pueden generar cargos pequeños.

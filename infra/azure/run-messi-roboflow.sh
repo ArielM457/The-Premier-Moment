@@ -9,12 +9,13 @@ usage() {
   echo "Uso: bash infra/azure/run-messi-roboflow.sh <etapa>"
   echo "Orden: prepare -> generate -> download -> process -> cpu -> status"
   echo "all: ejecuta el orden completo. stop: detiene el job y escala Roboflow a cero."
+  echo "fingerprint: agrega la huella de primer plano a un catálogo anterior, sin GPU."
   echo "Requiere MENTOX_AZURE_SUBSCRIPTION_ID y MENTOX_MODEL_API_KEY."
   echo "Guía: docs/persona-1-datos-y-vision/ejecutar-lote-messi-roboflow.md"
 }
 case "$action" in
   help|-h|--help) usage; exit 0 ;;
-  all|prepare|generate|download|process|cpu|status|stop) ;;
+  all|prepare|generate|download|process|fingerprint|cpu|status|stop) ;;
   *) usage >&2; exit 2 ;;
 esac
 die() { echo "Error: $*" >&2; exit 1; }
@@ -166,6 +167,18 @@ process() (
   cp "$catalog" "$batch_dir/roboflow-catalog.json"
   sha256sum "$catalog" "$batch_dir/roboflow-catalog.json"
 )
+fingerprint() {
+  verify_batch
+  [[ -x "$venv_dir/bin/python" ]] || die "Falta el entorno Python; ejecute prepare."
+  [[ -s "$batch_dir/roboflow-catalog.json" ]] || die "Falta el respaldo del catálogo; ejecute process."
+  cmp "$catalog" "$batch_dir/roboflow-catalog.json" || die "El catálogo y su respaldo difieren."
+  "$venv_dir/bin/python" deploy/azure-roboflow-replay/add_foreground.py --catalog "$catalog" \
+    --video "messi-001=$match_root/messi-001/match.mp4" \
+    --video "messi-002=$match_root/messi-002/match.mp4" \
+    --video "messi-003=$match_root/messi-003/match.mp4"
+  cp "$catalog" "$batch_dir/roboflow-catalog.json"
+  sha256sum "$catalog" "$batch_dir/roboflow-catalog.json"
+}
 cpu() {
   require_key
   verify_batch

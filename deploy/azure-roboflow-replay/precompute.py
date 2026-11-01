@@ -20,7 +20,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from uuid import uuid4
 
-from fingerprint import encode_fingerprint
+from fingerprint import attach_foreground, encode_fingerprint, foreground_frame
 
 MODELS = {"player", "ball", "pitch"}
 # Un lote son cientos de peticiones: un corte aislado de la red o de la
@@ -134,6 +134,7 @@ def main() -> None:
 
     records = []
     videos = []
+    foreground = []
     with tempfile.TemporaryDirectory(prefix="prime-roboflow-") as raw_temp:
         temp = Path(raw_temp)
         for video_id, video_path in args.video:
@@ -158,6 +159,7 @@ def main() -> None:
                     "fingerprint_rgb32x18_b64": encode_fingerprint(content),
                     "response": response,
                 })
+                foreground.append(foreground_frame(content))
                 print(f"{video_id}: {index + 1}/{len(frames)}", flush=True)
 
     catalog = {
@@ -168,6 +170,7 @@ def main() -> None:
         "videos": videos,
         "records": records,
     }
+    attach_foreground(catalog, foreground)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.output.with_suffix(".tmp")
     temporary.write_text(json.dumps(catalog, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

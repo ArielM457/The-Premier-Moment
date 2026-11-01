@@ -100,6 +100,11 @@ Para controlar cada paso, use el siguiente orden en la misma terminal:
 | 5 | `bash infra/azure/run-messi-roboflow.sh cpu` | Comprueba el respaldo, sube la imagen CPU y reemplaza la aplicación GPU. Elimina el job MESSI; conserva vídeos, imágenes y datos. |
 | 6 | `bash infra/azure/run-messi-roboflow.sh status` | Muestra perfil, endpoint, revisiones, réplicas y la integridad de los paquetes locales. |
 
+Un catálogo creado antes de la huella de primer plano necesita
+`bash infra/azure/run-messi-roboflow.sh fingerprint` antes de `cpu`. No usa la
+GPU: vuelve a extraer los fotogramas, comprueba su SHA-256 y actualiza el
+catálogo y su respaldo.
+
 `cpu` elimina y recrea únicamente la aplicación Roboflow, por lo que habrá una
 interrupción. Confirme que el perfil final sea `Consumption` y el mínimo, cero.
 La ausencia del job MESSI después del paso 5 es esperada.

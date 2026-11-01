@@ -11,8 +11,19 @@ from time import perf_counter
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
+import numpy as np
 
-from fingerprint import decode_fingerprint, fingerprint_array, visual_scores
+from fingerprint import (
+    FOREGROUND_BLUR,
+    FOREGROUND_HEIGHT,
+    FOREGROUND_WIDTH,
+    decode_fingerprint,
+    decode_foreground,
+    fingerprint_array,
+    foreground_frame,
+    foreground_scores,
+    visual_scores,
+)
 
 MODELS = ("player", "ball", "pitch")
 CATALOG_PATH = Path(os.getenv("MENTOX_PRECOMPUTED_CATALOG", "/app/data/catalog.json"))
@@ -20,6 +31,13 @@ API_KEY = os.getenv("MENTOX_MODEL_API_KEY", "")
 MAX_IMAGE_BYTES = int(os.getenv("MENTOX_MAX_IMAGE_BYTES", str(15 * 1024 * 1024)))
 MAX_VISUAL_SCORE = float(os.getenv("MENTOX_REPLAY_MAX_VISUAL_SCORE", "0.10"))
 MIN_SCORE_MARGIN = float(os.getenv("MENTOX_REPLAY_MIN_SCORE_MARGIN", "0.002"))
+# Calibrados con 120 capturas JPEG 0.82 tomadas en instantes al azar de los
+# tres vídeos MESSI clean: la peor coincidencia correcta fue 0.000037 y el
+# primer candidato de otro vídeo u otro momento quedó al menos 1.22 veces lejos.
+MAX_FOREGROUND_SCORE = float(os.getenv("MENTOX_REPLAY_MAX_FOREGROUND_SCORE", "0.0001"))
+MIN_FOREGROUND_RATIO = float(os.getenv("MENTOX_REPLAY_MIN_FOREGROUND_RATIO", "1.1"))
+# Registros del mismo vídeo a esta distancia describen el mismo momento.
+NEIGHBOR_WINDOW_MS = 2_000
 
 
 def require_api_key(
@@ -50,6 +68,23 @@ def load_catalog(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]], list
     return payload, records, references
 
 
+def load_foreground(payload: dict[str, Any], records: list[dict[str, Any]]) -> tuple[np.ndarray, np.ndarray] | None:
+    """Fondo y primeros planos con el fondo ya restado; None si el catálogo no los trae."""
+    settings = payload.get("foreground")
+    if settings is None:
+        return None
+    if (settings.get("width"), settings.get("height"), settings.get("blur")) != (
+        FOREGROUND_WIDTH, FOREGROUND_HEIGHT, FOREGROUND_BLUR,
+    ):
+        raise RuntimeError("La huella de primer plano del catálogo usa otros parámetros")
+    if any("foreground_rgb_b64" not in record for record in records):
+        raise RuntimeError("Un registro no contiene su huella de primer plano")
+    background = decode_foreground(settings["background_rgb_b64"]).astype(np.float32)
+    frames = np.stack([decode_foreground(record["foreground_rgb_b64"]) for record in records])
+    references = ((frames.astype(np.float32) - background) / 255.0).reshape(len(records), -1)
+    return background, references
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not API_KEY:
@@ -58,6 +93,7 @@ async def lifespan(app: FastAPI):
     app.state.catalog = catalog
     app.state.records = records
     app.state.references = references
+    app.state.foreground = load_foreground(catalog, records)
     yield
 
 
@@ -85,6 +121,7 @@ def health_ready() -> dict[str, Any]:
         "execution_mode": "precomputed_video_lookup",
         "videos": len(app.state.catalog.get("videos", [])),
         "records": len(records),
+        "visual_match": "foreground" if app.state.foreground is not None else "thumbnail",
     }
 
 
@@ -92,7 +129,43 @@ def same_results(left: dict[str, Any], right: dict[str, Any]) -> bool:
     return left.get("results") == right.get("results")
 
 
+def match_foreground(content: bytes) -> tuple[dict[str, Any], float]:
+    try:
+        query = foreground_frame(content)
+    except Exception as error:
+        raise HTTPException(status_code=422, detail="El archivo no es una imagen válida") from error
+    background, references = app.state.foreground
+    scores = foreground_scores(query, background, references)
+    order = scores.argsort()
+    best_index = int(order[0])
+    best_score = float(scores[best_index])
+    if best_score > MAX_FOREGROUND_SCORE:
+        raise HTTPException(
+            status_code=422,
+            detail=f"El fotograma no pertenece al catálogo precalculado (score={best_score:.6f})",
+        )
+    best = app.state.records[best_index]
+    # Una captura entre dos segundos se parece a ambos: eso no es ambigüedad.
+    # Sí lo es otro vídeo u otro momento con un puntaje casi igual.
+    limit = best_score * MIN_FOREGROUND_RATIO + 1e-12
+    for index in order[1:]:
+        if float(scores[index]) > limit:
+            break
+        candidate = app.state.records[int(index)]
+        if (candidate["video_id"] == best["video_id"]
+                and abs(candidate["video_time_ms"] - best["video_time_ms"]) <= NEIGHBOR_WINDOW_MS):
+            continue
+        if not same_results(best["response"], candidate["response"]):
+            raise HTTPException(
+                status_code=409,
+                detail="El fotograma coincide de forma ambigua con más de un registro",
+            )
+    return best, best_score
+
+
 def match_record(content: bytes) -> tuple[dict[str, Any], float]:
+    if app.state.foreground is not None:
+        return match_foreground(content)
     try:
         query = fingerprint_array(content)
     except Exception as error:
