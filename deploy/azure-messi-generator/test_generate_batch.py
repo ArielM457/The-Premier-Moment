@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -78,6 +79,30 @@ class SettingsTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertEqual(command[command.index("--mode") + 1], "rich")
         self.assertIn("--clean-hud", command)
+
+
+class CleanTests(unittest.TestCase):
+    def test_clean_uses_rich_renderer_and_records_clean_provenance(self) -> None:
+        with patch.dict(os.environ, {
+            "MENTOX_UPLOAD_ENABLED": "0",
+            "MENTOX_RENDER_MODE": "clean",
+            "MENTOX_MATCH_COUNT": "3",
+        }, clear=True):
+            settings = MODULE.Settings.from_environment()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            match_dir = Path(temporary)
+            for name in ("match.mp4", "events.jsonl", "tracking.jsonl", "metadata.jsonl"):
+                (match_dir / name).write_bytes(b"test")
+            with patch.object(MODULE.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as run:
+                manifest = MODULE._run_match(settings, 0, match_dir)
+
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("--mode") + 1], "rich")
+        self.assertIn("--clean-hud", command)
+        self.assertEqual(settings.count, 3)
+        self.assertEqual(manifest["render_mode"], "clean")
+        self.assertEqual(len(manifest["artifacts"]), 4)
 
 
 class GpuTests(unittest.TestCase):

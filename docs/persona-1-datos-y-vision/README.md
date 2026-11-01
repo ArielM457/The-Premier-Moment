@@ -5,6 +5,8 @@ Esta carpeta contiene el plan detallado de Persona 1. Su objetivo es entregar un
 ## Documentos
 
 - [Flujo actual: Roboflow, TeamSpotting y MESSI](guia-flujo-hibrido-messi.md): datos del mismo MP4, eventos entendibles y configuración sin GameState.
+- [Ejecutar MESSI clean y Roboflow desde un solo script](ejecutar-lote-messi-roboflow.md): tres vídeos MESSI `clean`, inferencia Roboflow por etapas, reanudación y entrega al equipo.
+- [Roboflow precalculado para tres vídeos fijos](guia-roboflow-precalculado.md): catálogo generado con GPU, servicio CPU con el mismo contrato de Roboflow, verificaciones y limitaciones.
 - [Overview para pruebas de modelos](overview-para-pruebas-de-modelos.md): contexto breve, alcance y ruta de trabajo para la persona o IA que ejecutará Roboflow y SoccerNet en una computadora GPU.
 - [Evaluación de costos de modelos en la nube](evaluacion-costos-modelos-en-la-nube.md): rendimiento medido, recursos Azure, estimaciones, WebGPU y alternativas de GPU.
 - [Comparativa de proveedores GPU](comparativa-proveedores-gpu.md): precios, riesgos y arquitectura híbrida recomendada para ejecutar los modelos fuera de Azure.

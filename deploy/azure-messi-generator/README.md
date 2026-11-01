@@ -44,6 +44,12 @@ bash infra/azure/deploy-messi-generator.sh
 El parche se aplica sobre la revisión fijada de MESSI durante la construcción.
 Si el código externo cambia y el parche deja de coincidir, la imagen falla en
 `git apply --check` en lugar de producir videos con una interfaz inesperada.
+El parche `clean-hud` se recuperó del commit de integración
+`1f6e8dd5f72520923089a9dc727a80d946244c84`.
+
+Para la demo de tres vídeos con Roboflow precalculado use
+`MENTOX_RENDER_MODE=clean` y `MENTOX_MATCH_COUNT=3`. El flujo completo está en
+[Ejecutar MESSI clean y Roboflow](../../docs/persona-1-datos-y-vision/ejecutar-lote-messi-roboflow.md).
 
 No son 90 minutos de vídeo real. Cada archivo representa un partido completo en
 una reproducción táctica comprimida de tres minutos. Generar 30 vídeos de 90
