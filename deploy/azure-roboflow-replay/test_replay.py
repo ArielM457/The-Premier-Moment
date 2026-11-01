@@ -91,6 +91,59 @@ def test_replay_rejects_unknown_frame(tmp_path, monkeypatch):
     assert response.status_code == 422
 
 
+def flaky_predict_once(monkeypatch, failures):
+    """Sustituye la petición real: lanza cada error de failures y luego responde."""
+    import precompute
+
+    calls = []
+
+    def fake(endpoint, api_key, frame, timeout):
+        calls.append(frame)
+        if len(calls) <= len(failures):
+            raise failures[len(calls) - 1]
+        return {"results": []}
+
+    monkeypatch.setattr(precompute, "predict_once", fake)
+    return precompute, calls
+
+
+def test_predict_retries_a_dropped_connection(tmp_path, monkeypatch):
+    from urllib.error import URLError
+
+    precompute, calls = flaky_predict_once(monkeypatch, [URLError("EOF occurred in violation of protocol")])
+    delays = []
+    frame = tmp_path / "frame-000031.jpg"
+    assert precompute.predict("https://model", "x" * 32, frame, 5, sleep=delays.append) == {"results": []}
+    assert len(calls) == 2
+    assert delays == [2]
+
+
+def test_predict_does_not_retry_a_rejected_key(tmp_path, monkeypatch):
+    import pytest
+    from urllib.error import HTTPError
+
+    rejected = HTTPError("https://model", 401, "Unauthorized", {}, None)
+    precompute, calls = flaky_predict_once(monkeypatch, [rejected])
+    with pytest.raises(HTTPError):
+        precompute.predict("https://model", "x" * 32, tmp_path / "frame.jpg", 5, sleep=lambda _: None)
+    assert len(calls) == 1
+
+
+def test_predict_gives_up_after_the_last_attempt(tmp_path, monkeypatch):
+    import pytest
+    from urllib.error import HTTPError
+
+    import precompute
+
+    busy = HTTPError("https://model", 503, "Service Unavailable", {}, None)
+    precompute, calls = flaky_predict_once(monkeypatch, [busy] * precompute.PREDICT_ATTEMPTS)
+    delays = []
+    with pytest.raises(HTTPError):
+        precompute.predict("https://model", "x" * 32, tmp_path / "frame.jpg", 5, sleep=delays.append)
+    assert len(calls) == precompute.PREDICT_ATTEMPTS
+    assert delays == [2, 4, 8, 16]
+
+
 def oversized_png(width: int, height: int) -> bytes:
     """PNG de pocos bytes que declara dimensiones enormes, sin decodificar sus píxeles."""
     import struct

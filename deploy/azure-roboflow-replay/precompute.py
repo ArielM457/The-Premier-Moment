@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from datetime import UTC, datetime
 from hashlib import sha256
+from http.client import HTTPException
 import json
 import mimetypes
 import os
@@ -13,6 +14,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from uuid import uuid4
@@ -20,6 +23,10 @@ from uuid import uuid4
 from fingerprint import encode_fingerprint
 
 MODELS = {"player", "ball", "pitch"}
+# Un lote son cientos de peticiones: un corte aislado de la red o de la
+# ingress de Azure no debe obligar a repetir todos los vídeos.
+PREDICT_ATTEMPTS = 5
+RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
 def file_sha256(path: Path) -> str:
@@ -51,7 +58,26 @@ def multipart_image(content: bytes, filename: str) -> tuple[bytes, str]:
     return body, f"multipart/form-data; boundary={boundary}"
 
 
-def predict(endpoint: str, api_key: str, frame: Path, timeout: float) -> dict:
+def predict(endpoint: str, api_key: str, frame: Path, timeout: float, sleep=time.sleep) -> dict:
+    """Reintenta errores de red y respuestas 429/5xx; los demás errores fallan enseguida."""
+    for attempt in range(1, PREDICT_ATTEMPTS + 1):
+        try:
+            return predict_once(endpoint, api_key, frame, timeout)
+        except HTTPError as error:
+            if error.code not in RETRYABLE_STATUS or attempt == PREDICT_ATTEMPTS:
+                raise
+            reason = f"HTTP {error.code}"
+        except (OSError, HTTPException) as error:
+            if attempt == PREDICT_ATTEMPTS:
+                raise
+            reason = f"{type(error).__name__}: {error}"
+        delay = 2 ** attempt
+        print(f"{frame.name}: {reason}; reintento {attempt}/{PREDICT_ATTEMPTS - 1} en {delay} s", flush=True)
+        sleep(delay)
+    raise AssertionError("predict agotó los intentos sin devolver ni fallar")
+
+
+def predict_once(endpoint: str, api_key: str, frame: Path, timeout: float) -> dict:
     content = frame.read_bytes()
     body, content_type = multipart_image(content, frame.name)
     request = Request(
