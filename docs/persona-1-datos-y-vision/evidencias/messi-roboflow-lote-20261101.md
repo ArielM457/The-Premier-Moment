@@ -106,7 +106,10 @@ Predicciones con confianza >= 0.3: 0
 - `apps/backend/.env` apunta a los dos endpoints nuevos con la clave de los
   modelos. El archivo no está en Git.
 - Los Event Hubs, el Service Bus y el Storage anteriores de la configuración
-  local ya no existen. La demo en Azure no los usa.
+  local ya no existen. La configuración local ahora usa transporte en memoria
+  para eventos, observaciones y enrutamiento, y lee el vídeo de
+  `authorized-videos` en el Storage de la demo con la sesión de `az` del
+  operador. La demo en Azure no usaba esos recursos.
 
 Despliegue de la demo con imágenes `0ae741e-20261101221639`. La API preparó el
 estadio en unos cinco minutos, con el arranque en frío de TeamSpotting:
@@ -125,6 +128,16 @@ play en 30 s -> playback_generation 9, captura activa
 capturas JPEG en 30.4, 31.6 y 32.8 s -> aceptadas, 3 modelos, 14 observaciones cada una, unos 26 ms
 pause -> 200
 observaciones entre 29 y 34 s -> 52: 41 roboflow-player, 6 soccernet, 4 messi-simulator, 1 roboflow-ball
+```
+
+El mismo recorrido contra el backend local, con transporte en memoria y el
+vídeo del Storage de la demo, preparó los modelos en unos cuatro minutos:
+
+```text
+prepare -> ready, Roboflow ready, TeamSpotting ready en Tesla T4
+capturas en 60.4, 61.6 y 62.8 s -> aceptadas, 15, 16 y 15 observaciones, unos 26 ms
+pause -> 200
+observaciones entre 59 y 64 s -> 55: 42 roboflow-player, 6 soccernet, 4 roboflow-ball, 3 messi-simulator
 ```
 
 ## Cambios técnicos
@@ -191,4 +204,3 @@ bash infra/azure/run-messi-roboflow.sh status
 
 - Recorrer el estadio en el navegador: preparación, Play, Pause, Seek y Restart,
   con capturas reales del navegador.
-- Llevar la configuración local a recursos propios o a transporte en memoria.
