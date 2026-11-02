@@ -8,10 +8,9 @@
 - **Suscripción:** Azure for Students del operador de Persona 2, distinta de la
   que alojaba los modelos anteriores.
 - **Estado:** lote generado y verificado; Roboflow CPU y TeamSpotting GPU
-  desplegados y probados en Azure; vídeo copiado al Storage de la demo y
-  configuración del backend actualizada. Falta el despliegue de la demo que la
-  aplica y el recorrido en el navegador. Esta evidencia no marca ninguna
-  historia como verificada.
+  desplegados y probados en Azure; demo desplegada con el vídeo nuevo y los dos
+  modelos. El recorrido por la API pasó; falta el recorrido visual en el
+  navegador. Esta evidencia no marca ninguna historia como verificada.
 
 ## Recursos en Azure
 
@@ -109,6 +108,25 @@ Predicciones con confianza >= 0.3: 0
 - Los Event Hubs, el Service Bus y el Storage anteriores de la configuración
   local ya no existen. La demo en Azure no los usa.
 
+Despliegue de la demo con imágenes `0ae741e-20261101221639`. La API preparó el
+estadio en unos cinco minutos, con el arranque en frío de TeamSpotting:
+
+```text
+02:21 UTC  vídeo d8b56a76ad63, simulador ready con 169 eventos y 181 cuadros de seguimiento
+02:21 UTC  Roboflow ready: precomputed-cpu, 3 vídeos, 540 registros, visual_match foreground
+02:26 UTC  TeamSpotting ready en Tesla T4, 1 ejecución, 0 fallos; preparación ready
+```
+
+Recorrido por la API, con las mismas llamadas que la interfaz:
+
+```text
+prepare -> ready, Roboflow ready, TeamSpotting ready
+play en 30 s -> playback_generation 9, captura activa
+capturas JPEG en 30.4, 31.6 y 32.8 s -> aceptadas, 3 modelos, 14 observaciones cada una, unos 26 ms
+pause -> 200
+observaciones entre 29 y 34 s -> 52: 41 roboflow-player, 6 soccernet, 4 messi-simulator, 1 roboflow-ball
+```
+
 ## Cambios técnicos
 
 | Archivo | Cambio |
@@ -171,6 +189,6 @@ bash infra/azure/run-messi-roboflow.sh status
 
 ## Dependencias y siguientes pasos
 
-- Desplegar la demo con `deploy-analytics.ps1` para aplicar el vídeo, los
-  endpoints y las claves nuevas.
-- Recorrer el estadio en el navegador: preparación, Play, Pause, Seek y Restart.
+- Recorrer el estadio en el navegador: preparación, Play, Pause, Seek y Restart,
+  con capturas reales del navegador.
+- Llevar la configuración local a recursos propios o a transporte en memoria.
