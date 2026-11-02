@@ -2,7 +2,7 @@
 
 **Demo:** <https://ca-mentoxp2-web.yellowbush-4175ef32.eastus.azurecontainerapps.io>
 
-The match with the MESSI stadium is `synthetic-live-001`, available in the Match tab of the Match Center. If the demo has been inactive, the first load may take a few seconds. Before stadium playback begins, TeamSpotting analyzes the video for approximately 3.5 minutes.
+The match with the MESSI stadium is `synthetic-live-001`, available in the Match tab of the Match Center. If the demo has been inactive, the first load may take a few seconds. Each time the API starts, it prepares the stadium in about five minutes while TeamSpotting starts its GPU and analyzes the video. The API stays on, so this normally happens once per deployment; if Play is pressed earlier, the interface waits for the preparation to finish.
 
 The Prime Moment is a monorepo for an experience that transforms football events into personalized moments and clear explanations. The [project documentation](docs/README.md) covers the scope, decisions, use cases, and event contract.
 
@@ -63,15 +63,17 @@ The Prime Moment follows a B2B2C model. Paying customers are clubs, leagues, med
 
 ### **What Runs in the Demo Today**
 
-The demo is a reduced deployment of the full design and is released with [`infra/azure/deploy-analytics.ps1`](infra/azure/deploy-analytics.ps1):
+The demo is a reduced deployment of the full design. It runs in one Azure subscription, and all its services share one Container Apps environment in `eastus` with a Consumption profile and a serverless NVIDIA T4 GPU profile. [`infra/azure/deploy-analytics.ps1`](infra/azure/deploy-analytics.ps1) deploys the application; [`infra/azure/run-messi-roboflow.sh`](infra/azure/run-messi-roboflow.sh) and [`infra/azure/deploy-soccernet-teamspotting.sh`](infra/azure/deploy-soccernet-teamspotting.sh) deploy the vision models.
 
-- **Container Apps:** one FastAPI service contains the filter, orchestrator, agents, and verification process. The environment also runs the React interface through nginx, the continuous processor, which is off by default, and the job that replays matches.
-- **Data and messaging:** Event Hubs carries match events, insights, and community-room activity. Blob Storage contains the MESSI video. The deployment also includes Container Registry, Log Analytics, and a managed identity. Service Bus exists, while the demo API currently routes agent work inside the application process.
+- **Application:** one FastAPI service contains the filter, orchestrator, agents, and verification process, and always keeps one replica running. The environment also runs the React interface through nginx, the continuous processor, which is off by default, and the job that replays matches.
+- **Data and messaging:** Event Hubs carries the replayed match events to the processor, the processor's insights, and community-room activity. Blob Storage holds the MESSI video and its companion files. The deployment also includes Container Registry, Log Analytics, and a managed identity. The API routes agent work and vision observations inside its own process, and the demo has no Service Bus.
 - **Database:** Supabase PostgreSQL is the source of match data, and Supabase Auth validates editors.
-- **Vision:** the stadium experience uses the MESSI simulator video with Roboflow and TeamSpotting.
+- **Stadium video:** `synthetic-live-001` plays `messi-001`, one of three 180-second MESSI matches generated on the T4. The MESSI simulator supplies the match events and tracking that play in sync with the video.
+- **Roboflow:** a CPU service replays the player, ball, and pitch detections that Roboflow computed on the T4 for those three videos. It recognizes each frame the browser sends by its moving players, ball, and clock. Its responses are marked `precomputed-cache` because they are not live inference.
+- **TeamSpotting:** SoccerNet T-DEED runs on the T4 and scales to zero when idle. It analyzes the whole video when the API starts and proposes passes, drives, and other actions.
 - **Narration:** the deployed demo uses the provisional provider. Azure OpenAI is available locally with `NARRATIVE_PROVIDER=azure`.
 
-API Management, Key Vault, Application Insights, Cosmos DB, AI Foundry, and Static Web Apps are not part of the current demo deployment, and the agents do not yet run in separate containers.
+The pitch model and TeamSpotting are trained on broadcast footage and report low confidence on the MESSI render. API Management, Key Vault, Application Insights, Cosmos DB, AI Foundry, Static Web Apps, and Service Bus are not part of the current demo deployment, and the agents do not yet run in separate containers. The video batch, the models, and their checks are recorded in the [November 1 evidence](docs/persona-1-datos-y-vision/evidencias/messi-roboflow-lote-20261101.md).
 
 ## **Repository Structure**
 
