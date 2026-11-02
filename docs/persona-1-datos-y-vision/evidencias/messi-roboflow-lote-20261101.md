@@ -9,8 +9,9 @@
   que alojaba los modelos anteriores.
 - **Estado:** lote generado y verificado; Roboflow CPU y TeamSpotting GPU
   desplegados y probados en Azure; demo desplegada con el vídeo nuevo y los dos
-  modelos. El recorrido por la API pasó; falta el recorrido visual en el
-  navegador. Esta evidencia no marca ninguna historia como verificada.
+  modelos. El recorrido por la API pasó y el operador confirmó en su navegador
+  que el estadio funciona. Esta evidencia no marca ninguna historia como
+  verificada.
 
 ## Recursos en Azure
 
@@ -192,8 +193,9 @@ bash infra/azure/run-messi-roboflow.sh status
 - La huella no rechaza con seguridad un render MESSI ajeno al catálogo.
 - El registro `k` corresponde al fotograma en `k + 0.5` s por el filtro `fps`
   de ffmpeg; `source_video_time_ms` lo etiqueta como `k` segundos.
-- Las capturas se simularon con ffmpeg y JPEG 0.82. Falta comprobarlas con el
-  navegador de la demo.
+- Las capturas de la auditoría se simularon con ffmpeg y JPEG 0.82. La prueba
+  en el navegador de la demo fue una comprobación manual del operador, sin
+  capturas de pantalla ni conteo de respuestas guardados.
 - Las respuestas son detecciones precalculadas, no inferencia en tiempo real.
 - TeamSpotting no superó 0.3 de confianza en ninguna predicción sobre el render
   MESSI; el modelo está entrenado con transmisiones reales.
@@ -202,5 +204,5 @@ bash infra/azure/run-messi-roboflow.sh status
 
 ## Dependencias y siguientes pasos
 
-- Recorrer el estadio en el navegador: preparación, Play, Pause, Seek y Restart,
-  con capturas reales del navegador.
+- Para dar una historia por verificada, repetir el recorrido en el navegador
+  guardando capturas de pantalla y el estado de `/api/v1/integration/status`.
