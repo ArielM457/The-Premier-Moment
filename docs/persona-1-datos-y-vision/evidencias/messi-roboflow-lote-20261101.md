@@ -7,10 +7,11 @@
   `generate`, `download`, `process`, `fingerprint`, `cpu` y `status`.
 - **Suscripción:** Azure for Students del operador de Persona 2, distinta de la
   que alojaba los modelos anteriores.
-- **Estado:** lote generado y verificado; servicio CPU desplegado y probado en
-  Azure. La demo todavía no lo usa: falta conectar el backend y desplegar
-  TeamSpotting en esta suscripción. Esta evidencia no marca ninguna historia
-  como verificada.
+- **Estado:** lote generado y verificado; Roboflow CPU y TeamSpotting GPU
+  desplegados y probados en Azure; vídeo copiado al Storage de la demo y
+  configuración del backend actualizada. Falta el despliegue de la demo que la
+  aplica y el recorrido en el navegador. Esta evidencia no marca ninguna
+  historia como verificada.
 
 ## Recursos en Azure
 
@@ -20,6 +21,8 @@
 | Registro | `mentox763c928d` | `rg-mentox-dev`, `eastus` |
 | Storage del lote | `stprime763c928d0dc2e988`, contenedor `synthetic-videos` | `rg-mentox-dev`, `eastus` |
 | Roboflow, ahora CPU | `ca-mentox-roboflow-dev`, `Consumption`, réplicas `0-1` | `rg-mentox-dev`, `eastus` |
+| TeamSpotting GPU | `ca-mentox-teamspotting-dev`, `NC8as-T4`, réplicas `0-1` | `rg-mentox-dev`, `eastus` |
+| Vídeo de la demo | `authorized-videos/messi/messi-clean-3x180s-20261031/messi-001/`, cinco archivos | `stmentoxp2ske7orupdfe76`, `rg-mentox-analytics` |
 | Job MESSI | `job-mentox-messi-dev`, eliminado por `cpu` | `rg-mentox-dev` |
 
 La suscripción admite un solo entorno de Container Apps. Los scripts usan el de
@@ -79,6 +82,33 @@ messi-003 12.2 s  -> 200 messi-003 12000 ms, 9 jugadores
 Sin clave -> 401. Imagen ajena de color plano -> 422.
 ```
 
+## TeamSpotting
+
+La imagen `soccernet-teamspotting:a69708c66769` ocupa 30.1 GB; doce capas se
+reutilizaron de Roboflow. La subida tardó unos 75 minutos con 5 a 20 Mbit/s.
+La aplicación se creó después con `MENTOX_IMAGE_BUILD_MODE=existing` y respondió
+`ready` en `Tesla T4` unos dos minutos después.
+
+Prueba con `messi-001` contra el servicio desplegado:
+
+```text
+Sin clave -> 401
+Con clave -> 200 en 196 s, device Tesla T4
+217 predicciones: pass 169, drive 34, high pass 8, throw in 3, out 2, header 1
+Predicciones con confianza >= 0.3: 0
+```
+
+## Conexión con la demo
+
+- Los cinco archivos de `messi-001` están en `authorized-videos` del Storage de
+  la demo, con el mismo SHA-256 del MP4.
+- `deploy-analytics.ps1` usa ese vídeo por defecto y conserva el perfil T4 si el
+  entorno ya lo tiene.
+- `apps/backend/.env` apunta a los dos endpoints nuevos con la clave de los
+  modelos. El archivo no está en Git.
+- Los Event Hubs, el Service Bus y el Storage anteriores de la configuración
+  local ya no existen. La demo en Azure no los usa.
+
 ## Cambios técnicos
 
 | Archivo | Cambio |
@@ -121,7 +151,7 @@ bash infra/azure/run-messi-roboflow.sh status
 | Python | 3.12.16 |
 | uv | 0.9.5 |
 | ffmpeg | 5.1.9 |
-| Imágenes | `roboflow-suite:4c8d1f3f4def`, `messi-generator:714303d55a39`, `roboflow-precomputed-replay:41fe7948fd62` |
+| Imágenes | `roboflow-suite:4c8d1f3f4def`, `messi-generator:714303d55a39`, `roboflow-precomputed-replay:41fe7948fd62`, `soccernet-teamspotting:a69708c66769` |
 
 ## Limitaciones
 
@@ -134,12 +164,13 @@ bash infra/azure/run-messi-roboflow.sh status
 - Las capturas se simularon con ffmpeg y JPEG 0.82. Falta comprobarlas con el
   navegador de la demo.
 - Las respuestas son detecciones precalculadas, no inferencia en tiempo real.
+- TeamSpotting no superó 0.3 de confianza en ninguna predicción sobre el render
+  MESSI; el modelo está entrenado con transmisiones reales.
+- Con mínimo cero, cada arranque de la API enciende la GPU de TeamSpotting unos
+  minutos.
 
 ## Dependencias y siguientes pasos
 
-- Desplegar TeamSpotting en esta suscripción: el backend exige Roboflow y
-  TeamSpotting listos antes de Play, y los endpoints anteriores ya no existen.
-- Copiar el paquete del vídeo elegido a `authorized-videos` y apuntar
-  `VISION_VIDEO_BLOB_NAME` a él.
-- Configurar en la demo el endpoint de Roboflow y la clave nueva.
-- Desplegar la demo con `-GpuWorkloadProfile` para conservar el perfil T4.
+- Desplegar la demo con `deploy-analytics.ps1` para aplicar el vídeo, los
+  endpoints y las claves nuevas.
+- Recorrer el estadio en el navegador: preparación, Play, Pause, Seek y Restart.
